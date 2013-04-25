@@ -750,7 +750,7 @@ start_pass (j_decompress_ptr cinfo)
  */
 
 METHODDEF(void)
-finish_pass (j_decompress_ptr cinfo)
+finish_pass (j_decompress_ptr JPEG_UNUSED(cinfo) )
 {
   /* no work necessary here */
 }

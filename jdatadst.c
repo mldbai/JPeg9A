@@ -75,7 +75,7 @@ init_destination (j_compress_ptr cinfo)
 }
 
 METHODDEF(void)
-init_mem_destination (j_compress_ptr cinfo)
+init_mem_destination (j_compress_ptr JPEG_UNUSED(cinfo) )
 {
   /* no work necessary here */
 }

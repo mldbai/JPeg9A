@@ -97,6 +97,23 @@ else
     where -switch is the proper switch.])
 fi
 
+# See if compiler supports attributes.
+AC_MSG_CHECKING([for variable attributes])
+AC_CACHE_VAL([ijg_cv_have_attributes],
+[AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+int testfunction () /* check definitions */
+{ int __attribute__((unused)) x; return 0; }
+]])],
+          [ijg_cv_have_attributes=yes],
+          [ijg_cv_have_attributes=no])])
+AC_MSG_RESULT([$ijg_cv_have_attributes])
+if test $ijg_cv_have_attributes = yes; then
+  AC_DEFINE([HAVE_ATTRIBUTES],[1],[Compiler supports variable attributes.])
+else
+  AC_MSG_WARN([Your compiler does not seem to know about variable attributes.
+    ])
+fi
+
 # Check header files
 AC_CHECK_HEADERS([stddef.h stdlib.h locale.h])
 AC_CHECK_HEADER([string.h], [],

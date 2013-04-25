@@ -120,6 +120,25 @@ int test2function (void)	/* check void arg list */
 #endif
 
 
+/* The next question is whether your compiler supports the __attribute__
+ * options.
+ * You need to know this in order to suppress compiler warnings
+ * for unused variables.
+ * The #define line below is set to assume your compiler supports the __attribute__
+ * option. If you get an error in this group of lines, undefine HAVE_ATTRIBUTES.
+ */
+
+#define HAVE_ATTRIBUTES
+
+#ifdef HAVE_ATTRIBUTES
+int testfunction () /* check definitions */
+{
+  int __attribute__((unused)) x;
+  return 0;
+}
+#endif
+
+
 /* Now we want to find out if your compiler knows what "unsigned char" means.
  * If you get an error on the "unsigned char un_char;" line,
  * then undefine HAVE_UNSIGNED_CHAR.
@@ -306,6 +325,11 @@ int main (argc, argv)
   fprintf(outfile, "#define HAVE_PROTOTYPES\n");
 #else
   fprintf(outfile, "#undef HAVE_PROTOTYPES\n");
+#endif
+#ifdef HAVE_ATTRIBUTES
+  fprintf(outfile, "#define HAVE_ATTRIBUTES\n");
+#else
+  fprintf(outfile, "#undef HAVE_ATTRIBUTES\n");
 #endif
 #ifdef HAVE_UNSIGNED_CHAR
   fprintf(outfile, "#define HAVE_UNSIGNED_CHAR\n");

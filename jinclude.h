@@ -89,3 +89,32 @@
   ((size_t) fread((void *) (buf), (size_t) 1, (size_t) (sizeofbuf), (file)))
 #define JFWRITE(file,buf,sizeofbuf)  \
   ((size_t) fwrite((const void *) (buf), (size_t) 1, (size_t) (sizeofbuf), (file)))
+
+
+/* Useful macros provided on http://stackoverflow.com/questions/8776810/parameter-name-omitted-c-vs-c
+ *-------------------------------------------------------------------------
+ *  Suppress nuisance compiler warnings. Yes, each compiler can already 
+ *  do this, each differently! VC9 has its UNREFERENCED_PARAMETER(),
+ *  which is almost the same as the SUPPRESS_UNUSED_WARNING() below.
+ *
+ *  We append _UNUSED to the variable name, because the dumb gcc compiler
+ *  doesn't bother to tell you if you erroneously _use_ something flagged
+ *  with __attribute__((unused)). So we are forced to *mangle* the name.
+ *-------------------------------------------------------------------------
+ */
+#if defined(__GNUC__) /* This would be MUCH better as a autoconf test, but after many struggles, I could not figure out how to do it */
+#  define HAVE_ATTRIBUTES
+#endif
+
+#if defined(__cplusplus)
+#  define JPEG_UNUSED(x)       /* = nothing */
+#elif defined(HAVE_ATTRIBUTES)
+#  define JPEG_UNUSED(x)       x##_JPEG_UNUSED __attribute__((unused))
+#else
+#  define JPEG_UNUSED(x)       x##_JPEG_UNUSED
+#endif
+
+#define JPEG_USED_UNUSED(x)  x##_JPEG_UNUSED // for assert(), debug, etc
+#define JPEG_UNUSED_FUNCTION(x) inline static x##_JPEG_UNUSED // "inline" for GCC warning
+#define JPEG_SUPPRESS_UNUSED_WARNING(x) (void)(x) // cf. MSVC UNREFERENCED_PARAMETER
+

@@ -158,8 +158,8 @@ METHODDEF(void)
 post_process_prepass (j_decompress_ptr cinfo,
 		      JSAMPIMAGE input_buf, JDIMENSION *in_row_group_ctr,
 		      JDIMENSION in_row_groups_avail,
-		      JSAMPARRAY output_buf, JDIMENSION *out_row_ctr,
-		      JDIMENSION out_rows_avail)
+		      JSAMPARRAY JPEG_UNUSED(output_buf), JDIMENSION *out_row_ctr,
+		      JDIMENSION JPEG_UNUSED(out_rows_avail) )
 {
   my_post_ptr post = (my_post_ptr) cinfo->post;
   JDIMENSION old_next_row, num_rows;
@@ -200,8 +200,8 @@ post_process_prepass (j_decompress_ptr cinfo,
 
 METHODDEF(void)
 post_process_2pass (j_decompress_ptr cinfo,
-		    JSAMPIMAGE input_buf, JDIMENSION *in_row_group_ctr,
-		    JDIMENSION in_row_groups_avail,
+		    JSAMPIMAGE JPEG_UNUSED(input_buf), JDIMENSION * JPEG_UNUSED(in_row_group_ctr),
+		    JDIMENSION JPEG_UNUSED(in_row_groups_avail),
 		    JSAMPARRAY output_buf, JDIMENSION *out_row_ctr,
 		    JDIMENSION out_rows_avail)
 {

@@ -69,7 +69,7 @@ LOCAL(void) write_colormap
 
 METHODDEF(void)
 put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-		JDIMENSION rows_supplied)
+		JDIMENSION JPEG_UNUSED(rows_supplied))
 /* This version is for writing 24-bit pixels */
 {
   bmp_dest_ptr dest = (bmp_dest_ptr) dinfo;
@@ -104,7 +104,7 @@ put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 
 METHODDEF(void)
 put_gray_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-	       JDIMENSION rows_supplied)
+	       JDIMENSION JPEG_UNUSED(rows_supplied))
 /* This version is for grayscale OR quantized color output */
 {
   bmp_dest_ptr dest = (bmp_dest_ptr) dinfo;
@@ -139,7 +139,7 @@ put_gray_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
  */
 
 METHODDEF(void)
-start_output_bmp (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
+start_output_bmp (j_decompress_ptr JPEG_UNUSED(cinfo), djpeg_dest_ptr JPEG_UNUSED(dinfo))
 {
   /* no work here */
 }

@@ -88,8 +88,8 @@ typedef ppm_dest_struct * ppm_dest_ptr;
  */
 
 METHODDEF(void)
-put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-		JDIMENSION rows_supplied)
+put_pixel_rows (j_decompress_ptr JPEG_UNUSED(cinfo), djpeg_dest_ptr dinfo,
+		JDIMENSION JPEG_UNUSED(rows_supplied))
 {
   ppm_dest_ptr dest = (ppm_dest_ptr) dinfo;
 
@@ -103,8 +103,8 @@ put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
  */
 
 METHODDEF(void)
-copy_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-		 JDIMENSION rows_supplied)
+copy_pixel_rows (j_decompress_ptr JPEG_UNUSED(cinfo), djpeg_dest_ptr dinfo,
+		 JDIMENSION JPEG_UNUSED(rows_supplied))
 {
   ppm_dest_ptr dest = (ppm_dest_ptr) dinfo;
   register char * bufferptr;
@@ -127,7 +127,7 @@ copy_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 
 METHODDEF(void)
 put_demapped_rgb (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-		  JDIMENSION rows_supplied)
+		  JDIMENSION JPEG_UNUSED(rows_supplied))
 {
   ppm_dest_ptr dest = (ppm_dest_ptr) dinfo;
   register char * bufferptr;
@@ -152,7 +152,7 @@ put_demapped_rgb (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 
 METHODDEF(void)
 put_demapped_gray (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-		   JDIMENSION rows_supplied)
+		   JDIMENSION JPEG_UNUSED(rows_supplied))
 {
   ppm_dest_ptr dest = (ppm_dest_ptr) dinfo;
   register char * bufferptr;

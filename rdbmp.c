@@ -450,7 +450,7 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
  */
 
 METHODDEF(void)
-finish_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
+finish_input_bmp (j_compress_ptr JPEG_UNUSED(cinfo), cjpeg_source_ptr JPEG_UNUSED(sinfo))
 {
   /* no work */
 }

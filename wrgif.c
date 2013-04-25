@@ -317,7 +317,7 @@ start_output_gif (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 
 METHODDEF(void)
 put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
-		JDIMENSION rows_supplied)
+		JDIMENSION JPEG_UNUSED(rows_supplied))
 {
   gif_dest_ptr dest = (gif_dest_ptr) dinfo;
   register JSAMPROW ptr;
