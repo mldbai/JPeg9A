@@ -19,11 +19,14 @@
 typedef struct {
   struct jpeg_color_deconverter pub; /* public fields */
 
-  /* Private state for YCC->RGB conversion */
+  /* Private state for YCbCr->RGB and BG_YCC->RGB conversion */
   int * Cr_r_tab;		/* => table for Cr to R conversion */
   int * Cb_b_tab;		/* => table for Cb to B conversion */
   INT32 * Cr_g_tab;		/* => table for Cr to G conversion */
   INT32 * Cb_g_tab;		/* => table for Cb to G conversion */
+
+  JSAMPLE * range_limit; /* pointer to normal sample range limit table, */
+		     /* or extended sample range limit table for BG_YCC */
 
   /* Private state for RGB->Y conversion */
   INT32 * rgb_y_tab;		/* => table for RGB to Y conversion */
@@ -32,27 +35,30 @@ typedef struct {
 typedef my_color_deconverter * my_cconvert_ptr;
 
 
-/**************** YCbCr -> RGB conversion: most common case **************/
-/****************   RGB -> Y   conversion: less common case **************/
+/***************  YCbCr -> RGB conversion: most common case **************/
+/*************** BG_YCC -> RGB conversion: less common case **************/
+/***************    RGB -> Y   conversion: less common case **************/
 
 /*
- * YCbCr is defined per ITU-R BT.601-7 (03/2011), formerly CCIR 601-1,
- * except that Cb and Cr are normalized to the range 0..MAXJSAMPLE
- * rather than -0.5 .. 0.5.
+ * YCbCr is defined per Recommendation ITU-R BT.601-7 (03/2011),
+ * previously known as Recommendation CCIR 601-1, except that Cb and Cr
+ * are normalized to the range 0..MAXJSAMPLE rather than -0.5 .. 0.5.
  * sRGB (standard RGB color space) is defined per IEC 61966-2-1:1999.
- * sYCC (standard luma-chroma-chroma color space)
+ * sYCC (standard luma-chroma-chroma color space with extended gamut)
  * is defined per IEC 61966-2-1:1999 Amendment A1:2003 Annex F.
- * Note that the derived conversion coefficients given in these
- * papers are imprecise.  The general conversion equations are
+ * bg-sRGB and bg-sYCC (big gamut standard color spaces)
+ * are defined per IEC 61966-2-1:1999 Amendment A1:2003 Annex G.
+ * Note that the derived conversion coefficients given in some of these
+ * documents are imprecise.  The general conversion equations are
  *
- *	R = Y + 2 * (1 - Kr) * Cr
- *	G = Y - 2 * (Kb * (1 - Kb) * Cb + Kr * (1 - Kr) * Cr) / (1 - Kr - Kb)
- *	B = Y + 2 * (1 - Kb) * Cb
+ *	R = Y + K * (1 - Kr) * Cr
+ *	G = Y - K * (Kb * (1 - Kb) * Cb + Kr * (1 - Kr) * Cr) / (1 - Kr - Kb)
+ *	B = Y + K * (1 - Kb) * Cb
  *
  *	Y = Kr * R + (1 - Kr - Kb) * G + Kb * B
  *
  * With Kr = 0.299 and Kb = 0.114 (derived according to SMPTE RP 177-1993
- * from the 1953 FCC NTSC primaries and CIE Illuminant C),
+ * from the 1953 FCC NTSC primaries and CIE Illuminant C), K = 2 for sYCC,
  * the conversion equations to be implemented are therefore
  *
  *	R = Y + 1.402 * Cr
@@ -62,6 +68,11 @@ typedef my_color_deconverter * my_cconvert_ptr;
  *	Y = 0.299 * R + 0.587 * G + 0.114 * B
  *
  * where Cb and Cr represent the incoming values less CENTERJSAMPLE.
+ * For bg-sYCC, with K = 4, the equations are
+ *
+ *	R = Y + 2.804 * Cr
+ *	G = Y - 0.688272572 * Cb - 1.428272572 * Cr
+ *	B = Y + 3.544 * Cb
  *
  * To avoid floating-point arithmetic, we represent the fractional constants
  * as integers scaled up by 2^16 (about 4 digits precision); we have to divide
@@ -98,11 +109,12 @@ typedef my_color_deconverter * my_cconvert_ptr;
 
 
 /*
- * Initialize tables for YCC->RGB colorspace conversion.
+ * Initialize tables for YCbCr->RGB and BG_YCC->RGB colorspace conversion.
  */
 
 LOCAL(void)
 build_ycc_rgb_table (j_decompress_ptr cinfo)
+/* Normal case, sYCC */
 {
   my_cconvert_ptr cconvert = (my_cconvert_ptr) cinfo->cconvert;
   int i;
@@ -122,6 +134,8 @@ build_ycc_rgb_table (j_decompress_ptr cinfo)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
 				(MAXJSAMPLE+1) * SIZEOF(INT32));
 
+  cconvert->range_limit = cinfo->sample_range_limit;
+
   for (i = 0, x = -CENTERJSAMPLE; i <= MAXJSAMPLE; i++, x++) {
     /* i is the actual input pixel value, in the range 0..MAXJSAMPLE */
     /* The Cb or Cr value we are thinking of is x = i - CENTERJSAMPLE */
@@ -137,6 +151,64 @@ build_ycc_rgb_table (j_decompress_ptr cinfo)
     /* We also add in ONE_HALF so that need not do it in inner loop */
     cconvert->Cb_g_tab[i] = (- FIX(0.344136286)) * x + ONE_HALF;
   }
+}
+
+
+LOCAL(void)
+build_bg_ycc_rgb_table (j_decompress_ptr cinfo)
+/* Wide gamut case, bg-sYCC */
+{
+  my_cconvert_ptr cconvert = (my_cconvert_ptr) cinfo->cconvert;
+  int i;
+  INT32 x;
+  SHIFT_TEMPS
+
+  cconvert->Cr_r_tab = (int *)
+    (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
+				(MAXJSAMPLE+1) * SIZEOF(int));
+  cconvert->Cb_b_tab = (int *)
+    (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
+				(MAXJSAMPLE+1) * SIZEOF(int));
+  cconvert->Cr_g_tab = (INT32 *)
+    (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
+				(MAXJSAMPLE+1) * SIZEOF(INT32));
+  cconvert->Cb_g_tab = (INT32 *)
+    (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
+				(MAXJSAMPLE+1) * SIZEOF(INT32));
+
+  cconvert->range_limit = (JSAMPLE *)
+    (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
+				5 * (MAXJSAMPLE+1) * SIZEOF(JSAMPLE));
+
+  for (i = 0, x = -CENTERJSAMPLE; i <= MAXJSAMPLE; i++, x++) {
+    /* i is the actual input pixel value, in the range 0..MAXJSAMPLE */
+    /* The Cb or Cr value we are thinking of is x = i - CENTERJSAMPLE */
+    /* Cr=>R value is nearest int to 2.804 * x */
+    cconvert->Cr_r_tab[i] = (int)
+		    RIGHT_SHIFT(FIX(2.804) * x + ONE_HALF, SCALEBITS);
+    /* Cb=>B value is nearest int to 3.544 * x */
+    cconvert->Cb_b_tab[i] = (int)
+		    RIGHT_SHIFT(FIX(3.544) * x + ONE_HALF, SCALEBITS);
+    /* Cr=>G value is scaled-up -1.428272572 * x */
+    cconvert->Cr_g_tab[i] = (- FIX(1.428272572)) * x;
+    /* Cb=>G value is scaled-up -0.688272572 * x */
+    /* We also add in ONE_HALF so that need not do it in inner loop */
+    cconvert->Cb_g_tab[i] = (- FIX(0.688272572)) * x + ONE_HALF;
+  }
+
+  /* Cb and Cr portions can extend to double range in wide gamut case,
+   * so we prepare an appropriate extended range limit table.
+   */
+
+  /* First segment of range limit table: limit[x] = 0 for x < 0 */
+  MEMZERO(cconvert->range_limit, 2 * (MAXJSAMPLE+1) * SIZEOF(JSAMPLE));
+  cconvert->range_limit += 2 * (MAXJSAMPLE+1);
+  /* Main part of range limit table: limit[x] = x */
+  for (i = 0; i <= MAXJSAMPLE; i++)
+    cconvert->range_limit[i] = (JSAMPLE) i;
+  /* End of range limit table: limit[x] = MAXJSAMPLE for x > MAXJSAMPLE */
+  for (; i < 3 * (MAXJSAMPLE+1); i++)
+    cconvert->range_limit[i] = MAXJSAMPLE;
 }
 
 
@@ -163,7 +235,7 @@ ycc_rgb_convert (j_decompress_ptr cinfo,
   register JDIMENSION col;
   JDIMENSION num_cols = cinfo->output_width;
   /* copy these pointers into registers if possible */
-  register JSAMPLE * range_limit = cinfo->sample_range_limit;
+  register JSAMPLE * range_limit = cconvert->range_limit;
   register int * Crrtab = cconvert->Cr_r_tab;
   register int * Cbbtab = cconvert->Cb_b_tab;
   register INT32 * Crgtab = cconvert->Cr_g_tab;
@@ -181,7 +253,7 @@ ycc_rgb_convert (j_decompress_ptr cinfo,
       cb = GETJSAMPLE(inptr1[col]);
       cr = GETJSAMPLE(inptr2[col]);
       /* Range-limiting is essential due to noise introduced by DCT losses,
-       * and for extended gamut encodings (sYCC).
+       * for extended gamut (sYCC) and wide gamut (bg-sYCC) encodings.
        */
       outptr[RGB_RED]   = range_limit[y + Crrtab[cr]];
       outptr[RGB_GREEN] = range_limit[y +
@@ -194,7 +266,7 @@ ycc_rgb_convert (j_decompress_ptr cinfo,
 }
 
 
-/**************** Cases other than YCbCr -> RGB **************/
+/**************** Cases other than YCC -> RGB ****************/
 
 
 /*
@@ -406,7 +478,7 @@ null_convert (j_decompress_ptr cinfo,
 
 /*
  * Color conversion for grayscale: just copy the data.
- * This also works for YCbCr -> grayscale conversion, in which
+ * This also works for YCC -> grayscale conversion, in which
  * we just copy the Y (luminance) component and ignore chrominance.
  */
 
@@ -537,6 +609,8 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
 
   case JCS_RGB:
   case JCS_YCbCr:
+  case JCS_BG_RGB:
+  case JCS_BG_YCC:
     if (cinfo->num_components != 3)
       ERREXIT(cinfo, JERR_BAD_J_COLORSPACE);
     break;
@@ -553,8 +627,10 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
     break;
   }
 
-  /* Support color transform only for RGB colorspace */
-  if (cinfo->color_transform && cinfo->jpeg_color_space != JCS_RGB)
+  /* Support color transform only for RGB colorspaces */
+  if (cinfo->color_transform &&
+      cinfo->jpeg_color_space != JCS_RGB &&
+      cinfo->jpeg_color_space != JCS_BG_RGB)
     ERREXIT(cinfo, JERR_CONVERSION_NOTIMPL);
 
   /* Set out_color_components and conversion method based on requested space.
@@ -568,6 +644,7 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
     switch (cinfo->jpeg_color_space) {
     case JCS_GRAYSCALE:
     case JCS_YCbCr:
+    case JCS_BG_YCC:
       cconvert->pub.color_convert = grayscale_convert;
       /* For color->grayscale conversion, only the Y (0) component is needed */
       for (ci = 1; ci < cinfo->num_components; ci++)
@@ -594,12 +671,16 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
   case JCS_RGB:
     cinfo->out_color_components = RGB_PIXELSIZE;
     switch (cinfo->jpeg_color_space) {
+    case JCS_GRAYSCALE:
+      cconvert->pub.color_convert = gray_rgb_convert;
+      break;
     case JCS_YCbCr:
       cconvert->pub.color_convert = ycc_rgb_convert;
       build_ycc_rgb_table(cinfo);
       break;
-    case JCS_GRAYSCALE:
-      cconvert->pub.color_convert = gray_rgb_convert;
+    case JCS_BG_YCC:
+      cconvert->pub.color_convert = ycc_rgb_convert;
+      build_bg_ycc_rgb_table(cinfo);
       break;
     case JCS_RGB:
       switch (cinfo->color_transform) {
@@ -616,6 +697,23 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
     default:
       ERREXIT(cinfo, JERR_CONVERSION_NOTIMPL);
     }
+    break;
+
+  case JCS_BG_RGB:
+    cinfo->out_color_components = RGB_PIXELSIZE;
+    if (cinfo->jpeg_color_space == JCS_BG_RGB) {
+      switch (cinfo->color_transform) {
+      case JCT_NONE:
+	cconvert->pub.color_convert = rgb_convert;
+	break;
+      case JCT_SUBTRACT_GREEN:
+	cconvert->pub.color_convert = rgb1_rgb_convert;
+	break;
+      default:
+	ERREXIT(cinfo, JERR_CONVERSION_NOTIMPL);
+      }
+    } else
+      ERREXIT(cinfo, JERR_CONVERSION_NOTIMPL);
     break;
 
   case JCS_CMYK:

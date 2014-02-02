@@ -29,14 +29,16 @@ typedef my_color_converter * my_cconvert_ptr;
 /**************** RGB -> YCbCr conversion: most common case **************/
 
 /*
- * YCbCr is defined per ITU-R BT.601-7 (03/2011), formerly CCIR 601-1,
- * except that Cb and Cr are normalized to the range 0..MAXJSAMPLE
- * rather than -0.5 .. 0.5.
+ * YCbCr is defined per Recommendation ITU-R BT.601-7 (03/2011),
+ * previously known as Recommendation CCIR 601-1, except that Cb and Cr
+ * are normalized to the range 0..MAXJSAMPLE rather than -0.5 .. 0.5.
  * sRGB (standard RGB color space) is defined per IEC 61966-2-1:1999.
- * sYCC (standard luma-chroma-chroma color space)
+ * sYCC (standard luma-chroma-chroma color space with extended gamut)
  * is defined per IEC 61966-2-1:1999 Amendment A1:2003 Annex F.
- * Note that the derived conversion coefficients given in these
- * papers are imprecise.  The general conversion equations are
+ * bg-sRGB and bg-sYCC (big gamut standard color spaces)
+ * are defined per IEC 61966-2-1:1999 Amendment A1:2003 Annex G.
+ * Note that the derived conversion coefficients given in some of these
+ * documents are imprecise.  The general conversion equations are
  *	Y  = Kr * R + (1 - Kr - Kb) * G + Kb * B
  *	Cb = 0.5 * (B - Y) / (1 - Kb)
  *	Cr = 0.5 * (R - Y) / (1 - Kr)
@@ -325,7 +327,7 @@ rgb_rgb1_convert (j_compress_ptr cinfo,
 /*
  * Convert some rows of samples to the JPEG colorspace.
  * This version handles grayscale output with no conversion.
- * The source can be either plain grayscale or YCbCr (since Y == gray).
+ * The source can be either plain grayscale or YCC (since Y == gray).
  */
 
 METHODDEF(void)
@@ -452,11 +454,13 @@ jinit_color_converter (j_compress_ptr cinfo)
     break;
 
   case JCS_RGB:
+  case JCS_BG_RGB:
     if (cinfo->input_components != RGB_PIXELSIZE)
       ERREXIT(cinfo, JERR_BAD_IN_COLORSPACE);
     break;
 
   case JCS_YCbCr:
+  case JCS_BG_YCC:
     if (cinfo->input_components != 3)
       ERREXIT(cinfo, JERR_BAD_IN_COLORSPACE);
     break;
@@ -473,8 +477,10 @@ jinit_color_converter (j_compress_ptr cinfo)
     break;
   }
 
-  /* Support color transform only for RGB colorspace */
-  if (cinfo->color_transform && cinfo->jpeg_color_space != JCS_RGB)
+  /* Support color transform only for RGB colorspaces */
+  if (cinfo->color_transform &&
+      cinfo->jpeg_color_space != JCS_RGB &&
+      cinfo->jpeg_color_space != JCS_BG_RGB)
     ERREXIT(cinfo, JERR_CONVERSION_NOTIMPL);
 
   /* Check num_components, set conversion method based on requested space */
@@ -485,6 +491,7 @@ jinit_color_converter (j_compress_ptr cinfo)
     switch (cinfo->in_color_space) {
     case JCS_GRAYSCALE:
     case JCS_YCbCr:
+    case JCS_BG_YCC:
       cconvert->pub.color_convert = grayscale_convert;
       break;
     case JCS_RGB:
@@ -497,9 +504,10 @@ jinit_color_converter (j_compress_ptr cinfo)
     break;
 
   case JCS_RGB:
+  case JCS_BG_RGB:
     if (cinfo->num_components != 3)
       ERREXIT(cinfo, JERR_BAD_J_COLORSPACE);
-    if (cinfo->in_color_space == JCS_RGB) {
+    if (cinfo->in_color_space == cinfo->jpeg_color_space) {
       switch (cinfo->color_transform) {
       case JCT_NONE:
 	cconvert->pub.color_convert = rgb_convert;
@@ -523,6 +531,37 @@ jinit_color_converter (j_compress_ptr cinfo)
       cconvert->pub.color_convert = rgb_ycc_convert;
       break;
     case JCS_YCbCr:
+      cconvert->pub.color_convert = null_convert;
+      break;
+    default:
+      ERREXIT(cinfo, JERR_CONVERSION_NOTIMPL);
+    }
+    break;
+
+  case JCS_BG_YCC:
+    if (cinfo->num_components != 3)
+      ERREXIT(cinfo, JERR_BAD_J_COLORSPACE);
+    switch (cinfo->in_color_space) {
+    case JCS_RGB:
+      /* For conversion from normal RGB input to BG_YCC representation,
+       * the Cb/Cr values are first computed as usual, and then
+       * quantized further after DCT processing by a factor of
+       * 2 in reference to the nominal quantization factor.
+       */
+      /* need quantization scale by factor of 2 after DCT */
+      cinfo->comp_info[1].component_needed = TRUE;
+      cinfo->comp_info[2].component_needed = TRUE;
+      /* compute normal YCC first */
+      cconvert->pub.start_pass = rgb_ycc_start;
+      cconvert->pub.color_convert = rgb_ycc_convert;
+      break;
+    case JCS_YCbCr:
+      /* need quantization scale by factor of 2 after DCT */
+      cinfo->comp_info[1].component_needed = TRUE;
+      cinfo->comp_info[2].component_needed = TRUE;
+      /*FALLTHROUGH*/
+    case JCS_BG_YCC:
+      /* Pass through for BG_YCC input */
       cconvert->pub.color_convert = null_convert;
       break;
     default:

@@ -331,8 +331,10 @@ initial_setup (j_compress_ptr cinfo, boolean transcode_only)
       jdiv_round_up((long) cinfo->jpeg_height *
 		    (long) (compptr->v_samp_factor * compptr->DCT_v_scaled_size),
 		    (long) (cinfo->max_v_samp_factor * cinfo->block_size));
-    /* Mark component needed (this flag isn't actually used for compression) */
-    compptr->component_needed = TRUE;
+    /* Don't need quantization scale after DCT,
+     * until color conversion says otherwise.
+     */
+    compptr->component_needed = FALSE;
   }
 
   /* Compute number of fully interleaved MCU rows (number of times that
@@ -828,9 +830,10 @@ jinit_c_master_control (j_compress_ptr cinfo, boolean transcode_only)
   if (cinfo->optimize_coding)
     cinfo->arith_code = FALSE; /* disable arithmetic coding */
   else if (! cinfo->arith_code &&
-	   (cinfo->progressive_mode || cinfo->block_size < DCTSIZE))
+	   (cinfo->progressive_mode ||
+	    (cinfo->block_size > 1 && cinfo->block_size < DCTSIZE)))
     /* TEMPORARY HACK ??? */
-    /* assume default tables no good for progressive or downscale mode */
+    /* assume default tables no good for progressive or reduced AC mode */
     cinfo->optimize_coding = TRUE; /* force Huffman optimization */
 
   /* Initialize my private state */

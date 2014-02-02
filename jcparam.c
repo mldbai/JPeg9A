@@ -359,6 +359,9 @@ jpeg_set_defaults (j_compress_ptr cinfo)
    * JFIF_minor_version to 2.  We could probably get away with just defaulting
    * to 1.02, but there may still be some decoders in use that will complain
    * about that; saying 1.01 should minimize compatibility problems.
+   *
+   * For wide gamut colorspaces (BG_RGB and BG_YCC), the major version will be
+   * overridden by jpeg_set_colorspace and set to 2.
    */
   cinfo->JFIF_major_version = 1; /* Default JFIF version = 1.01 */
   cinfo->JFIF_minor_version = 1;
@@ -383,6 +386,9 @@ GLOBAL(void)
 jpeg_default_colorspace (j_compress_ptr cinfo)
 {
   switch (cinfo->in_color_space) {
+  case JCS_UNKNOWN:
+    jpeg_set_colorspace(cinfo, JCS_UNKNOWN);
+    break;
   case JCS_GRAYSCALE:
     jpeg_set_colorspace(cinfo, JCS_GRAYSCALE);
     break;
@@ -398,8 +404,12 @@ jpeg_default_colorspace (j_compress_ptr cinfo)
   case JCS_YCCK:
     jpeg_set_colorspace(cinfo, JCS_YCCK);
     break;
-  case JCS_UNKNOWN:
-    jpeg_set_colorspace(cinfo, JCS_UNKNOWN);
+  case JCS_BG_RGB:
+    /* No translation for now -- conversion to BG_YCC not yet supportet */
+    jpeg_set_colorspace(cinfo, JCS_BG_RGB);
+    break;
+  case JCS_BG_YCC:
+    jpeg_set_colorspace(cinfo, JCS_BG_YCC);
     break;
   default:
     ERREXIT(cinfo, JERR_BAD_IN_COLORSPACE);
@@ -440,29 +450,40 @@ jpeg_set_colorspace (j_compress_ptr cinfo, J_COLOR_SPACE colorspace)
   cinfo->write_Adobe_marker = FALSE; /* write no Adobe marker by default */
 
   switch (colorspace) {
+  case JCS_UNKNOWN:
+    cinfo->num_components = cinfo->input_components;
+    if (cinfo->num_components < 1 || cinfo->num_components > MAX_COMPONENTS)
+      ERREXIT2(cinfo, JERR_COMPONENT_COUNT, cinfo->num_components,
+	       MAX_COMPONENTS);
+    for (ci = 0; ci < cinfo->num_components; ci++) {
+      SET_COMP(ci, ci, 1,1, 0, 0,0);
+    }
+    break;
   case JCS_GRAYSCALE:
     cinfo->write_JFIF_header = TRUE; /* Write a JFIF marker */
     cinfo->num_components = 1;
     /* JFIF specifies component ID 1 */
-    SET_COMP(0, 1, 1,1, 0, 0,0);
+    SET_COMP(0, 0x01, 1,1, 0, 0,0);
     break;
   case JCS_RGB:
     cinfo->write_Adobe_marker = TRUE; /* write Adobe marker to flag RGB */
     cinfo->num_components = 3;
-    SET_COMP(0, 0x52 /* 'R' */, 1,1, 0, 0,0);
-    SET_COMP(1, 0x47 /* 'G' */, 1,1, 0,
+    SET_COMP(0, 0x52 /* 'R' */, 1,1, 0,
 		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0,
 		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0);
-    SET_COMP(2, 0x42 /* 'B' */, 1,1, 0, 0,0);
+    SET_COMP(1, 0x47 /* 'G' */, 1,1, 0, 0,0);
+    SET_COMP(2, 0x42 /* 'B' */, 1,1, 0,
+		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0,
+		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0);
     break;
   case JCS_YCbCr:
     cinfo->write_JFIF_header = TRUE; /* Write a JFIF marker */
     cinfo->num_components = 3;
     /* JFIF specifies component IDs 1,2,3 */
     /* We default to 2x2 subsamples of chrominance */
-    SET_COMP(0, 1, 2,2, 0, 0,0);
-    SET_COMP(1, 2, 1,1, 1, 1,1);
-    SET_COMP(2, 3, 1,1, 1, 1,1);
+    SET_COMP(0, 0x01, 2,2, 0, 0,0);
+    SET_COMP(1, 0x02, 1,1, 1, 1,1);
+    SET_COMP(2, 0x03, 1,1, 1, 1,1);
     break;
   case JCS_CMYK:
     cinfo->write_Adobe_marker = TRUE; /* write Adobe marker to flag CMYK */
@@ -475,19 +496,33 @@ jpeg_set_colorspace (j_compress_ptr cinfo, J_COLOR_SPACE colorspace)
   case JCS_YCCK:
     cinfo->write_Adobe_marker = TRUE; /* write Adobe marker to flag YCCK */
     cinfo->num_components = 4;
-    SET_COMP(0, 1, 2,2, 0, 0,0);
-    SET_COMP(1, 2, 1,1, 1, 1,1);
-    SET_COMP(2, 3, 1,1, 1, 1,1);
-    SET_COMP(3, 4, 2,2, 0, 0,0);
+    SET_COMP(0, 0x01, 2,2, 0, 0,0);
+    SET_COMP(1, 0x02, 1,1, 1, 1,1);
+    SET_COMP(2, 0x03, 1,1, 1, 1,1);
+    SET_COMP(3, 0x04, 2,2, 0, 0,0);
     break;
-  case JCS_UNKNOWN:
-    cinfo->num_components = cinfo->input_components;
-    if (cinfo->num_components < 1 || cinfo->num_components > MAX_COMPONENTS)
-      ERREXIT2(cinfo, JERR_COMPONENT_COUNT, cinfo->num_components,
-	       MAX_COMPONENTS);
-    for (ci = 0; ci < cinfo->num_components; ci++) {
-      SET_COMP(ci, ci, 1,1, 0, 0,0);
-    }
+  case JCS_BG_RGB:
+    cinfo->write_JFIF_header = TRUE; /* Write a JFIF marker */
+    cinfo->JFIF_major_version = 2;   /* Set JFIF major version = 2 */
+    cinfo->num_components = 3;
+    /* Add offset 0x20 to the normal R/G/B component IDs */
+    SET_COMP(0, 0x72 /* 'r' */, 1,1, 0,
+		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0,
+		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0);
+    SET_COMP(1, 0x67 /* 'g' */, 1,1, 0, 0,0);
+    SET_COMP(2, 0x62 /* 'b' */, 1,1, 0,
+		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0,
+		cinfo->color_transform == JCT_SUBTRACT_GREEN ? 1 : 0);
+    break;
+  case JCS_BG_YCC:
+    cinfo->write_JFIF_header = TRUE; /* Write a JFIF marker */
+    cinfo->JFIF_major_version = 2;   /* Set JFIF major version = 2 */
+    cinfo->num_components = 3;
+    /* Add offset 0x20 to the normal Cb/Cr component IDs */
+    /* We default to 2x2 subsamples of chrominance */
+    SET_COMP(0, 0x01, 2,2, 0, 0,0);
+    SET_COMP(1, 0x22, 1,1, 1, 1,1);
+    SET_COMP(2, 0x23, 1,1, 1, 1,1);
     break;
   default:
     ERREXIT(cinfo, JERR_BAD_J_COLORSPACE);
@@ -571,8 +606,10 @@ jpeg_simple_progression (j_compress_ptr cinfo)
     ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
 
   /* Figure space needed for script.  Calculation must match code below! */
-  if (ncomps == 3 && cinfo->jpeg_color_space == JCS_YCbCr) {
-    /* Custom script for YCbCr color images. */
+  if (ncomps == 3 &&
+      (cinfo->jpeg_color_space == JCS_YCbCr ||
+       cinfo->jpeg_color_space == JCS_BG_YCC)) {
+    /* Custom script for YCC color images. */
     nscans = 10;
   } else {
     /* All-purpose script for other color spaces. */
@@ -587,7 +624,7 @@ jpeg_simple_progression (j_compress_ptr cinfo)
    * multiple compressions without changing the settings.  To avoid a memory
    * leak if jpeg_simple_progression is called repeatedly for the same JPEG
    * object, we try to re-use previously allocated space, and we allocate
-   * enough space to handle YCbCr even if initially asked for grayscale.
+   * enough space to handle YCC even if initially asked for grayscale.
    */
   if (cinfo->script_space == NULL || cinfo->script_space_size < nscans) {
     cinfo->script_space_size = MAX(nscans, 10);
@@ -599,8 +636,10 @@ jpeg_simple_progression (j_compress_ptr cinfo)
   cinfo->scan_info = scanptr;
   cinfo->num_scans = nscans;
 
-  if (ncomps == 3 && cinfo->jpeg_color_space == JCS_YCbCr) {
-    /* Custom script for YCbCr color images. */
+  if (ncomps == 3 &&
+      (cinfo->jpeg_color_space == JCS_YCbCr ||
+       cinfo->jpeg_color_space == JCS_BG_YCC)) {
+    /* Custom script for YCC color images. */
     /* Initial DC scan */
     scanptr = fill_dc_scans(scanptr, ncomps, 0, 1);
     /* Initial AC scan: get some luma data out in a hurry */

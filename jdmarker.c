@@ -350,6 +350,9 @@ get_sos (j_decompress_ptr cinfo)
 
     /* Detect the case where component id's are not unique, and, if so, */
     /* create a fake component id using the same logic as in get_sof.   */
+    /* Note:  This also ensures that all of the SOF components are      */
+    /* referenced in the single scan case, which prevents access to     */
+    /* uninitialized memory in later decoding stages. */
     for (ci = 0; ci < i; ci++) {
       if (c == cinfo->cur_comp_info[ci]->component_id) {
 	c = cinfo->cur_comp_info[0]->component_id;
@@ -492,6 +495,8 @@ get_dht (j_decompress_ptr cinfo)
      */
     if (count > 256 || ((INT32) count) > length)
       ERREXIT(cinfo, JERR_BAD_HUFF_TABLE);
+
+    MEMZERO(huffval, SIZEOF(huffval)); /* pre-zero array for later copy */
 
     for (i = 0; i < count; i++)
       INPUT_BYTE(cinfo, huffval[i], return FALSE);
@@ -735,12 +740,13 @@ examine_app0 (j_decompress_ptr cinfo, JOCTET FAR * data,
     cinfo->X_density = (GETJOCTET(data[8]) << 8) + GETJOCTET(data[9]);
     cinfo->Y_density = (GETJOCTET(data[10]) << 8) + GETJOCTET(data[11]);
     /* Check version.
-     * Major version must be 1, anything else signals an incompatible change.
+     * Major version must be 1 or 2, anything else signals an incompatible
+     * change.
      * (We used to treat this as an error, but now it's a nonfatal warning,
      * because some bozo at Hijaak couldn't read the spec.)
      * Minor version should be 0..2, but process anyway if newer.
      */
-    if (cinfo->JFIF_major_version != 1)
+    if (cinfo->JFIF_major_version != 1 && cinfo->JFIF_major_version != 2)
       WARNMS2(cinfo, JWRN_JFIF_MAJOR,
 	      cinfo->JFIF_major_version, cinfo->JFIF_minor_version);
     /* Generate trace messages */

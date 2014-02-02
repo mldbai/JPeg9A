@@ -395,6 +395,8 @@ decode_mcu_AC_first (j_decompress_ptr cinfo, JBLOCKROW *MCU_data)
 
 /*
  * MCU decoding for DC successive approximation refinement scan.
+ * Note: we assume such scans can be multi-component,
+ * although the spec is not very clear on the point.
  */
 
 METHODDEF(boolean)

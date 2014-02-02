@@ -19,11 +19,11 @@
  *   10  for 10-bit sample values
  *   11  for 11-bit sample values
  *   12  for 12-bit sample values
- * Only 8, 9, 10, 11, and 12 bits sample data precision are supported
- * for full-feature DCT processing.  Further depths up to 16-bit may
- * be added later for the lossless modes of operation.
- * Run-time selection of data precision will be added later and is
- * currently not supported, sorry.
+ * Only 8, 9, 10, 11, and 12 bits sample data precision are supported for
+ * full-feature DCT processing.  Further depths up to 16-bit may be added
+ * later for the lossless modes of operation.
+ * Run-time selection and conversion of data precision will be added later
+ * and are currently not supported, sorry.
  * Exception:  The transcoding part (jpegtran) supports all settings in a
  * single instance, since it operates on the level of DCT coefficients and
  * not sample values.  The DCT coefficients are of the same type (16 bits)
@@ -354,11 +354,12 @@ typedef enum { FALSE = 0, TRUE = 1 } boolean;
 #define C_PROGRESSIVE_SUPPORTED	    /* Progressive JPEG? (Requires MULTISCAN)*/
 #define DCT_SCALING_SUPPORTED	    /* Input rescaling via DCT? (Requires DCT_ISLOW)*/
 #define ENTROPY_OPT_SUPPORTED	    /* Optimization of entropy coding parms? */
-/* Note: if you selected 12-bit data precision, it is dangerous to turn off
- * ENTROPY_OPT_SUPPORTED.  The standard Huffman tables are only good for 8-bit
- * precision, so jchuff.c normally uses entropy optimization to compute
- * usable tables for higher precision.  If you don't want to do optimization,
- * you'll have to supply different default Huffman tables.
+/* Note: if you selected more than 8-bit data precision, it is dangerous to
+ * turn off ENTROPY_OPT_SUPPORTED.  The standard Huffman tables are only
+ * good for 8-bit precision, so arithmetic coding is recommended for higher
+ * precision.  The Huffman encoder normally uses entropy optimization to
+ * compute usable tables for higher precision.  Otherwise, you'll have to
+ * supply different default Huffman tables.
  * The exact same statements apply for progressive JPEG: the default tables
  * don't work for progressive mode.  (This may get fixed, however.)
  */
@@ -369,7 +370,7 @@ typedef enum { FALSE = 0, TRUE = 1 } boolean;
 #define D_ARITH_CODING_SUPPORTED    /* Arithmetic coding back end? */
 #define D_MULTISCAN_FILES_SUPPORTED /* Multiple-scan JPEG files? */
 #define D_PROGRESSIVE_SUPPORTED	    /* Progressive JPEG? (Requires MULTISCAN)*/
-#define IDCT_SCALING_SUPPORTED	    /* Output rescaling via IDCT? */
+#define IDCT_SCALING_SUPPORTED	    /* Output rescaling via IDCT? (Requires DCT_ISLOW)*/
 #define SAVE_MARKERS_SUPPORTED	    /* jpeg_save_markers() needed? */
 #define BLOCK_SMOOTHING_SUPPORTED   /* Block smoothing? (Progressive only) */
 #undef  UPSAMPLE_SCALING_SUPPORTED  /* Output rescaling at upsample stage? */

@@ -159,9 +159,11 @@ jpeg_calc_output_dimensions (j_decompress_ptr cinfo)
     cinfo->out_color_components = 1;
     break;
   case JCS_RGB:
+  case JCS_BG_RGB:
     cinfo->out_color_components = RGB_PIXELSIZE;
     break;
   case JCS_YCbCr:
+  case JCS_BG_YCC:
     cinfo->out_color_components = 3;
     break;
   case JCS_CMYK:
