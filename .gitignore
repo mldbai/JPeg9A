@@ -13,4 +13,12 @@
 *.a
 
 # emacs source backups
-*~
+*~.deps
+Makefile
+config.log
+config.status
+jconfig.h
+jpeg
+libtool
+stamp-h1
+.deps/*
